@@ -4,7 +4,4 @@ version = "0.1"
 description = "Smite Reward Script"
 
 [tool.distutils.build_exe]
-includes = [
-    "psutil", "win32gui", "win32process", "win32com.client", 
-    "win32con", "subprocess", "time", "ctypes"
-]
+includes = [ "psutil", "win32gui", "win32process", "win32com.client", "win32con", "subprocess", "time", "ctypes" ]
