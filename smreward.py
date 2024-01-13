@@ -1,13 +1,65 @@
 import psutil
-import win32gui, win32process, win32com.client, win32con
-import subprocess, time;
+import win32api, win32gui, win32process, win32com.client, win32con, winreg
+import os, subprocess, time, toml;
 import ctypes
 import ctypes.wintypes as wintypes
 
 IsWindowVisible = ctypes.windll.user32.IsWindowVisible
 
+# Config settings
+START_UP_TIME = 300
+UPDATE_ATTEMPTS = 60
+SHUTDOWN_AFTER = True
+
+def read_reg(ep, p = r"", k = ''):
+    try:
+        key = winreg.OpenKeyEx(ep, p)
+        value = winreg.QueryValueEx(key,k)
+        if key:
+            winreg.CloseKey(key)
+        return str(value[0])
+    except Exception as e:
+        return None
+
+
+def get_steam_exe_path():
+
+    # try known install locations for all Disk Drives
+    installLocations = ["X:\\Steam\\steam.exe", "X:\\Program Files\\Steam\\steam.exe", "X:\\Program Files (x86)\\Steam\\steam.exe"]
+    for drive in win32api.GetLogicalDriveStrings().split('\000')[:-1]:
+        drive = drive.replace(':\\', '')
+        for path in installLocations:
+            path = path.replace("X", drive)
+            if os.path.exists(path):
+                return path
+
+    # check registry for install location
+    reg1 = read_reg(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Wow6432Node\Valve\Steam", 'InstallPath')
+    reg2 = read_reg(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", 'InstallPath')
+    possiblePaths = [os.path.join(i, 'steam.exe') for i in [reg1, reg2] if i is not None]
+    for path in possiblePaths:
+        if os.path.exists(path):
+            return path
+
+    # try to find it via the Start Menu shortcut
+    startmenuPath = "{}\\Microsoft\\Windows\\Start Menu\\Programs\\Steam\\Steam.lnk".format(os.getenv('APPDATA'))
+    if os.path.exists(startmenuPath):
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shortcut = shell.CreateShortCut(startmenuPath)
+        if os.path.exists(shortcut.Targetpath):
+            return shortcut.Targetpath
+    
+    # No path found
+    return None
+
 def start_smite():
-    args = ["C:\Program Files (x86)\Steam\Steam.exe", "steam://rungameid/386360"]
+    path = get_steam_exe_path()
+
+    if path is None:
+        print("Cannot find steam executable")
+        exit()
+
+    args = [path, "steam://rungameid/386360"]
     subprocess.Popen(args)
 
 
@@ -143,17 +195,38 @@ if __name__ == '__main__':
     print("Running Smite Startup script")
     print("============================\n\n")
 
+    print("Reading configuration")
+    if not os.path.exists('./config/settings.toml'):
+        os.mkdir('config')
+        with open('./config/settings.toml', 'w') as f:
+            toml.dump({
+                "program": {
+                    "START_UP_TIME": 300,
+                    "UPDATE_ATTEMPTS": 60,
+                    "SHUTDOWN_AFTER": True
+                }
+            }, f)
+    else:
+        try:
+            with open('./config/settings.toml', 'r') as f:
+                config = toml.load(f)
+            
+            START_UP_TIME = int(config['program']['START_UP_TIME'])
+            UPDATE_ATTEMPTS = int(config['program']['UPDATE_ATTEMPTS'])
+            SHUTDOWN_AFTER = bool(config['program']['SHUTDOWN_AFTER'])
+        except:
+            print("Couldn't read config values. Using defaults.")
+
     print("Waiting for PC to start up.")
-    time.sleep(60)
+    time.sleep(START_UP_TIME)
 
 
     if not smite_running():
         print("Starting smite.")
         start_smite()
 
-    # 60 attempts is a half hour (should be enough for updates)
     attempts = 0
-    while not smite_running() and attempts < 60:
+    while not smite_running() and attempts < UPDATE_ATTEMPTS:
         print("Waiting for smite...")
         time.sleep(30)
         attempts += 1
@@ -168,7 +241,7 @@ if __name__ == '__main__':
 
     # smite should be running and in focus
     print("Waiting for game to load.")
-    time.sleep(60)
+    time.sleep(120)
 
     print("Collecting reward")
     count = 0
