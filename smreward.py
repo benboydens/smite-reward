@@ -11,14 +11,14 @@ START_UP_TIME = 300
 UPDATE_ATTEMPTS = 60
 SHUTDOWN_AFTER = True
 
-def read_reg(ep, p = r"", k = ''):
+def read_reg(ep, p = "", k = ""):
     try:
         key = winreg.OpenKeyEx(ep, p)
         value = winreg.QueryValueEx(key,k)
         if key:
             winreg.CloseKey(key)
         return str(value[0])
-    except Exception as e:
+    except:
         return None
 
 
@@ -251,5 +251,8 @@ if __name__ == '__main__':
         time.sleep(2)
         count += 1
 
-    print("Done")
-
+    if SHUTDOWN_AFTER:
+        print("Shutting down")
+        os.system("shutdown -s")
+    else:
+        print("Done")
